@@ -1,0 +1,155 @@
+//-------- CONST-анты --------
+#define povorot 12 //пин входящих сигналов с поворотников
+#define tsens 11 //пин входящих сигналов сенсорной кнопки
+#define rele 10 //пин выходящих сигналов реле актуатора
+#define pw_tsens 9 //пин питания сенсорной кнопки
+#define pw_rele 8 //пин питания реле актуатора
+
+#define andr 100 //время антидребезга твердотельного реле
+#define ozhid_1 2000 //время ожидания сигналов с твердотельного реле
+#define ozhid_2 4000 //время ожидания перед следующим включением актуатора
+#define ozhid_3 800 //время ожидания перед отключением актуатора
+#define ozhid_4 5000 //время ожидания режима "WAIT"
+
+
+//-------- ПЕРЕМЕННЫЕ --------
+bool povorot_sig = 0; //сигнал-переменная с твердотельного реле
+byte sost = 0; //состояние переменной, где 1 - LOCK, 2 - UNLOCK
+byte sost_1 = 0; //блок-переменная, где 1 - LOCK, 2 - UNLOCK
+bool tsens_sig = 0; //сигнал-переменная сенсорной кнопки
+bool flag = 0; //блок-переменная первого сигнала
+bool flag_1 = 0; //переменная разрешающая второй сигнал
+bool flag_2 = 0; //блок-переменная второго сигнала
+bool flag_3 = 0; //переменная разрешающая третий сигнал
+bool flag_4 = 0; //блок-переменная третьего сигнала
+bool flag_5 = 0; //переменная на включение реле актуатора
+bool flag_6 = 0; //переменная на включение сенсорной кнопки
+bool flag_7 = 0; //переменная на включение реле
+unsigned long time_andr = 0; //время для #define andr 
+unsigned long time_ozhid_1 = 0; //время для #define ozhid_1
+unsigned long time_ozhid_2 = 0; //время для #define ozhid_2
+unsigned long time_ozhid_3 = 0; //время для #define ozhid_3
+unsigned long time_ozhid_4 = 0; //время для #define ozhid_4
+
+
+//-------- ФУНКЦИЯ НАЧАЛЬНОЙ НАСТРОЙКИ --------
+void setup(){
+  Serial.begin(9600); //открываем порт для вывода информации
+  pinMode(povorot, INPUT_PULLUP); //пин входящих сигналов через подтягивающий резистор
+  pinMode(tsens, INPUT); //пин входящих сигналов с сенсорной кнопки
+  pinMode(rele, OUTPUT); //пин выходного сигнала для реле актуатора
+  pinMode(pw_tsens, OUTPUT); //пин выходного сигнала питания для сенсорной кнопки
+  pinMode(pw_rele, OUTPUT); //пин выходного сигнала питания для реле актуатора
+}
+
+
+//-------- ФУНКЦИЯ ОБРАБОТКИ СИГНАЛОВ --------
+void loop(){
+  povorot_sig = !digitalRead(povorot);
+  tsens_sig = digitalRead(tsens);
+  povorot_signaly();
+  touch_sensor();
+  if(sost == 1 && povorot_sig == 0 && millis() - time_ozhid_1 > ozhid_1){
+    Serial.println("LOCK");
+    flag_1 = 0; 
+    sost = 0;
+    sost_1 = 1;
+    flag_6 = 0;
+    flag_7 = 0;
+    digitalWrite(pw_tsens, flag_6);
+    digitalWrite(pw_rele, flag_7);
+    time_ozhid_1 = millis();
+ }
+  if(sost == 2 && povorot_sig == 0 && millis() - time_ozhid_1 > ozhid_1){
+    Serial.println("UNLOCK");
+    flag_3 = 0;
+    sost = 0;
+    sost_1 = 2;
+    flag_6 = 1;
+    flag_7 = 1;
+    digitalWrite(pw_tsens, flag_6);
+    digitalWrite(pw_rele, flag_7);
+    time_ozhid_1 = millis();
+ }
+  if(sost == 3 && sost_1 == 1){
+    Serial.println("WAIT 5 seconds and LOCK");
+    time_ozhid_4 = millis();
+    sost = 0;
+  }
+  if(sost == 3 && sost_1 == 2){
+    Serial.println("WAIT 5 seconds and UNLOCK");
+    time_ozhid_4 = millis();
+    sost = 0;
+  }
+//-------- Условия от переполнения счетчика --------
+  if(millis() < time_andr){
+    time_andr = millis();
+    } else if(millis() < time_ozhid_1){
+      time_ozhid_1 = millis();
+    } else if(millis() < time_ozhid_2){
+      time_ozhid_2 = millis();
+    } else if(millis() < time_ozhid_3){
+      time_ozhid_3 = millis();
+    } else if(millis() < time_ozhid_4){
+      time_ozhid_4 = millis();
+    }
+}
+
+
+//-------- ФУНКЦИЯ СИГНАЛОВ --------
+void povorot_signaly(){
+//-------- Первый сигнал --------
+  if(povorot_sig == 1 && flag == 0 && flag_1 == 0 && flag_3 == 0 && millis() - time_andr > andr && millis() - time_ozhid_4 > ozhid_4){
+    flag = 1;
+    Serial.println("1 Signal");
+ }
+  if(povorot_sig == 0 && flag == 1 && millis() - time_andr > andr){
+    flag = 0;
+    flag_1 = 1;
+    sost = 1;
+    time_andr = millis();
+    time_ozhid_1 = millis();
+ }
+//-------- Второй сигнал --------
+  if(povorot_sig == 1 && flag_1 == 1 && flag_2 == 0 && millis() - time_andr > andr){
+    flag_2 = 1;
+    Serial.println("2 Signal");
+ }
+  if(povorot_sig == 0 && flag_2 == 1 && millis() - time_andr > andr){
+    flag_1 = 0;
+    flag_2 = 0;
+    flag_3 = 1;
+    sost = 2;
+    time_andr = millis();
+    time_ozhid_1 = millis();
+ }
+//-------- Третий сигнал и более --------
+  if(povorot_sig == 1 && flag_3 == 1 && flag_4 == 0 && millis() - time_andr > andr){
+    flag_4 = 1;
+    Serial.println("3 Signal");
+ }
+  if(povorot_sig == 0 && flag_4 == 1 && millis() - time_andr > andr){
+    flag_4 = 0;
+    flag_3 = 0;
+    sost = 3;
+    time_andr = millis();
+    time_ozhid_1 = millis();
+ } 
+}
+
+
+//-------- ФУНКЦИЯ СЕНСОРНОЙ КНОПКИ --------
+void touch_sensor(){
+   if(sost_1 == 2 && tsens_sig == 1 && flag_5 == 0 && millis() - time_ozhid_2 > ozhid_2){
+    flag_5 = 1;
+    digitalWrite(rele, flag_5);
+    time_ozhid_2 = millis();
+    time_ozhid_3 = millis();
+  }
+   if(flag_5 == 1 && millis() - time_ozhid_3 > ozhid_3) {
+    flag_5 = 0;
+    digitalWrite(rele, flag_5);
+    time_ozhid_2 = millis();
+    time_ozhid_3 = millis();
+  }
+}
